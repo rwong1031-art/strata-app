@@ -25,9 +25,9 @@ import { Separator } from "@/components/ui/separator";
 
 const steps = [
   { id: 1, title: "Strata detailssssss", icon: Building2 },
-  { id: 2, title: "Governance status", icon: ShieldCheck },
-  { id: 3, title: "Core documents", icon: Upload },
-  { id: 4, title: "Setup checklists", icon: ClipboardList },
+  { id: 2, title: "Governance statussss", icon: ShieldCheck },
+  { id: 3, title: "Core documentsssss", icon: Upload },
+  { id: 4, title: "Setup checklistsssss", icon: ClipboardList },
 ];
 
 const requiredDocs = [
