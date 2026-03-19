@@ -25,9 +25,9 @@ import { Separator } from "@/components/ui/separator";
 
 const steps = [
   { id: 1, title: "Strata detailssss", icon: Building2 },
-  { id: 2, title: "Governance statussss", icon: ShieldCheck },
-  { id: 3, title: "Core documentssss", icon: Upload },
-  { id: 4, title: "Setup checklistssss", icon: ClipboardList },
+  { id: 2, title: "Governance status", icon: ShieldCheck },
+  { id: 3, title: "Core documents", icon: Upload },
+  { id: 4, title: "Setup checklists", icon: ClipboardList },
 ];
 
 const requiredDocs = [
@@ -50,6 +50,9 @@ export default function Home() {
     contactName: "",
     contactEmail: "",
     contactPhone: "",
+    secondaryContactName: "",
+    secondaryContactEmail: "",
+    secondaryContactPhone: "",
   });
 
   const [governance, setGovernance] = useState({
@@ -347,6 +350,44 @@ export default function Home() {
                           }
                           placeholder="name@email.com"
                         />
+                      </div>
+
+                      {/* Secondary contact section */}
+                      <div className="space-y-2 md:col-span-2">
+                        <Label className="font-semibold">Secondary contact</Label>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label>Name</Label>
+                            <Input
+                              value={details.secondaryContactName}
+                              onChange={(e) =>
+                                setDetails({ ...details, secondaryContactName: e.target.value })
+                              }
+                              placeholder="Secondary contact name"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input
+                              value={details.secondaryContactEmail}
+                              onChange={(e) =>
+                                setDetails({ ...details, secondaryContactEmail: e.target.value })
+                              }
+                              placeholder="name@email.com"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Phone</Label>
+                            <Input
+                              value={details.secondaryContactPhone}
+                              onChange={(e) =>
+                                setDetails({ ...details, secondaryContactPhone: e.target.value })
+                              }
+                              placeholder="e.g. (555) 987-6543"
+                              type="tel"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
