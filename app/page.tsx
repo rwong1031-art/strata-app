@@ -1,5 +1,6 @@
 'use client'
 
+import { supabase } from '@/lib/supabase';
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -40,6 +41,61 @@ const requiredDocs = [
 ];
 
 export default function Home() {
+    // Save strata details to Supabase
+    const saveStrataDetails = async () => {
+      try {
+        const payload = {
+          strataName: details.strataName,
+          unitCount: details.unitCount,
+          address: details.address,
+          province: details.province,
+          contactName: details.contactName,
+          contactEmail: details.contactEmail,
+          contactPhone: details.contactPhone,
+        };
+
+        console.log('Supabase payload:', payload);
+
+        const result = (await supabase
+          .from('strata_details')
+          .insert([payload])) as unknown;
+
+        console.log('Supabase raw result:', result);
+
+        const { data, error, status, statusText } = (result as {
+          data?: any;
+          error?: any;
+          status?: number | null;
+          statusText?: string | null;
+        });
+
+        const errorRaw = error || null;
+        const errorMessage =
+          (error && typeof error === 'object' && Object.keys(error).length > 0
+            ? error.message || error.msg || error.details || JSON.stringify(error)
+            : null) ||
+          (typeof error === 'string' ? error : null) ||
+          (status && status >= 400 ? `HTTP ${status} ${statusText || ''}` : null);
+
+        if (errorMessage) {
+          console.error('Supabase error triggered:', {
+            status,
+            statusText,
+            error: errorRaw,
+            errorMessage,
+          });
+          throw new Error(`Supabase insert failed: ${errorMessage}`);
+        }
+
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+          console.warn('Supabase: insert succeeded but returned empty data.', { data, status, statusText });
+        }
+
+        return data;
+      } catch (err) {
+        console.error('Save error:', err);
+      }
+    };
   const [currentStep, setCurrentStep] = useState(1);
 
   const [details, setDetails] = useState({
@@ -129,6 +185,9 @@ export default function Home() {
   const completedCount = checklist.filter((item) => item.done).length;
 
   const nextStep = () => {
+    if (currentStep === 1) {
+      saveStrataDetails();
+    }
     setCurrentStep((s) => Math.min(steps.length, s + 1));
   };
   const prevStep = () => setCurrentStep((s) => Math.max(1, s - 1));
