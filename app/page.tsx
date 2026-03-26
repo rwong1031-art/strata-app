@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 const steps = [
-  { id: 1, title: "Strata details WIP ONLY 1239", icon: Building2 },
+  { id: 1, title: "Strata details WIP ONLY 137", icon: Building2 },
   { id: 2, title: "Governance statussss", icon: ShieldCheck },
   { id: 3, title: "Core documentsssss", icon: Upload },
   { id: 4, title: "Setup checklistsssss", icon: ClipboardList },
