@@ -1,8 +1,8 @@
 'use client'
 
 import { supabase } from '@/lib/supabase';
-import React, { useMemo, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useMemo, useState, useRef } from "react";
+
 import {
   Building2,
   CheckCircle2,
@@ -23,11 +23,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { motion, AnimatePresence } from "framer-motion";
 
 const steps = [
-  { id: 2, title: "Governance statussss", icon: ShieldCheck },
-  { id: 3, title: "Core documentsssss", icon: Upload },
-  { id: 4, title: "Setup checklistsssss", icon: ClipboardList },
+  { id: 1, title: "Strata details wip 549 file upload", icon: Building2 },
+  { id: 2, title: "Governance status", icon: ShieldCheck },
+  { id: 3, title: "Core documents", icon: Upload },
+  { id: 4, title: "Setup checklist", icon: ClipboardList },
 ];
 
 const requiredDocs = [
@@ -40,63 +42,9 @@ const requiredDocs = [
 ];
 
 export default function Home() {
-    // Save strata details to Supabase
-    const saveStrataDetails = async () => {
-      try {
-        const payload = {
-          strataName: details.strataName,
-          unitCount: details.unitCount,
-          address: details.address,
-          province: details.province,
-          contactName: details.contactName,
-          contactEmail: details.contactEmail,
-          contactPhone: details.contactPhone,
-        };
-
-        console.log('Supabase payload:', payload);
-
-        const result = (await supabase
-          .from('strata_details')
-          .insert([payload])) as unknown;
-
-        console.log('Supabase raw result:', result);
-
-        const { data, error, status, statusText } = (result as {
-          data?: any;
-          error?: any;
-          status?: number | null;
-          statusText?: string | null;
-        });
-
-        const errorRaw = error || null;
-        const errorMessage =
-          (error && typeof error === 'object' && Object.keys(error).length > 0
-            ? error.message || error.msg || error.details || JSON.stringify(error)
-            : null) ||
-          (typeof error === 'string' ? error : null) ||
-          (status && status >= 400 ? `HTTP ${status} ${statusText || ''}` : null);
-
-        if (errorMessage) {
-          console.error('Supabase error triggered:', {
-            status,
-            statusText,
-            error: errorRaw,
-            errorMessage,
-          });
-          throw new Error(`Supabase insert failed: ${errorMessage}`);
-        }
-
-        if (!data || (Array.isArray(data) && data.length === 0)) {
-          console.warn('Supabase: insert succeeded but returned empty data.', { data, status, statusText });
-        }
-
-        return data;
-      } catch (err) {
-        console.error('Save error:', err);
-      }
-    };
+  // All useState hooks must be declared before any useMemo or useEffect that uses them
   const [currentStep, setCurrentStep] = useState(1);
-
+  const [strataId, setStrataId] = useState<string>('');
   const [details, setDetails] = useState({
     strataName: "Harbour View Strata",
     unitCount: "8",
@@ -106,7 +54,6 @@ export default function Home() {
     contactEmail: "",
     contactPhone: "",
   });
-
   const [governance, setGovernance] = useState({
     councilFormed: true,
     annualGeneralMeetingHeld: false,
@@ -116,6 +63,48 @@ export default function Home() {
     budgetPrepared: false,
     notes: "",
   });
+
+  // Save strata details via server-side API to bypass RLS
+  const saveStrataDetails = async () => {
+    try {
+      const payload = {
+        strataName: details.strataName,
+        unitCount: details.unitCount,
+        address: details.address,
+        province: details.province,
+        contactName: details.contactName,
+        contactEmail: details.contactEmail,
+        contactPhone: details.contactPhone,
+      };
+
+      const response = await fetch('/api/strata-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        const errorMessage = result.error || result.details || response.statusText;
+        console.error('Strata details API error:', errorMessage, result);
+        throw new Error(`Strata details insert failed: ${errorMessage}`);
+      }
+
+      // If the row returns an ID (uuid), capture it for later document uploads.
+      const returnedId = result.strata?.id;
+      if (returnedId) {
+        setStrataId(returnedId);
+      }
+    } catch (error) {
+      // Error handling for saveStrataDetails
+      console.error('saveStrataDetails error', error);
+      throw error;
+    }
+  };
+
+
+
+
 
   const governanceFields: Array<{
     key:
@@ -135,10 +124,23 @@ export default function Home() {
     { key: "budgetPrepared", label: "Operating budget prepared" },
   ];
 
+  // Tracks which standard required documents are selected/uploaded by user.
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([
     "Registered bylaws",
     "Insurance documents",
   ]);
+
+  // Stores actual file upload results from API (file name + public URL).
+  const [uploadedFiles, setUploadedFiles] = useState<{
+    name: string;
+    publicUrl: string;
+  }[]>([]);
+
+  // Uploading state to disable the upload button while in-flight.
+  const [uploading, setUploading] = useState(false);
+
+  // Hidden file input reference so we can trigger click from custom button.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const completion = useMemo(() => (currentStep / steps.length) * 100, [currentStep]);
 
@@ -210,6 +212,87 @@ export default function Home() {
     setUploadedDocs((prev) =>
       prev.includes(doc) ? prev.filter((d) => d !== doc) : [...prev, doc]
     );
+  };
+
+  // Upload a single file and optional document type to our API route.
+  // Returns API response JSON or throws on error.
+  const uploadDocument = async (file: File, documentType?: string) => {
+    setUploading(true);
+    try {
+      // Ensure the backend receives a valid strataId (typically a UUID) for metadata linkage.
+      if (!strataId) {
+        throw new Error('strataId is required before uploading documents. Please save strata details first.');
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('strataId', strataId);
+      if (documentType) formData.append('documentType', documentType);
+
+      const response = await fetch('/api/upload-document', {
+        method: 'POST',
+        body: formData,
+      });
+
+      // Parse response safely (handle invalid JSON gracefully).
+      const rawText = await response.text();
+      let result: any = {};
+      try {
+        result = rawText ? JSON.parse(rawText) : {};
+      } catch (parseErr) {
+        result = { parseError: String(parseErr), rawText };
+      }
+
+      // Handle non-2xx server error responses with useful debugging data.
+      if (!response.ok) {
+        const textError =
+          result?.error || result?.message || result?.detail || result?.parseError;
+        const errorMessage =
+          textError ||
+          (Object.keys(result).length ? JSON.stringify(result) : null) ||
+          response.statusText ||
+          `Upload failed with status ${response.status}`;
+
+        console.error('Upload failed', {
+          status: response.status,
+          statusText: response.statusText,
+          payload: result,
+          errorMessage,
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      // Add uploaded file to local UI list and check the doc if it is on required checklist.
+      setUploadedFiles((prev) => [
+        ...prev,
+        { name: file.name, publicUrl: result.file?.publicUrl ?? '' },
+      ]);
+
+      if (requiredDocs.includes(file.name)) {
+        setUploadedDocs((prev) => Array.from(new Set([...prev, file.name])));
+      }
+
+      return result;
+    } catch (error) {
+      console.error('uploadDocument error', error);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle hidden file input change event and call uploadDocument for each selected file.
+  const onFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    for (let i = 0; i < files.length; i++) {
+      await uploadDocument(files[i]);
+    }
+
+    // Clear input so same file can be selected again later if needed.
+    event.target.value = '';
   };
 
   const StepIcon = steps[currentStep - 1].icon;
@@ -442,6 +525,14 @@ export default function Home() {
 
                   {currentStep === 3 && (
                     <div className="space-y-6">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        multiple
+                        onChange={onFileInputChange}
+                        className="hidden"
+                      />
+
                       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                         <Upload className="mx-auto mb-3 h-8 w-8 text-slate-500" />
                         <h3 className="text-lg font-medium text-slate-900">
@@ -451,7 +542,33 @@ export default function Home() {
                           Connect the documents your strata already has so the system can organize
                           and answer governance questions accurately.
                         </p>
-                        <Button className="mt-4 rounded-xl">Select files</Button>
+                        <Button
+                          className="mt-4 rounded-xl"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                        >
+                          {uploading ? 'Uploading...' : 'Select files'}
+                        </Button>
+
+                        {uploadedFiles.length > 0 && (
+                          <div className="mt-4 text-left">
+                            <div className="text-sm text-slate-500">Uploaded files</div>
+                            <ul className="mt-2 space-y-1 text-sm">
+                              {uploadedFiles.map((f, idx) => (
+                                <li key={`${f.name}-${idx}`}>
+                                  <a
+                                    href={f.publicUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-medium text-blue-600 hover:underline"
+                                  >
+                                    {f.name}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-2">
